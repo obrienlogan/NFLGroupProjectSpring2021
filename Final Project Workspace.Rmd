@@ -1,0 +1,389 @@
+---
+title: "Rough Draft NFL Analysis"
+author: "Samuel Peterson and Logan O'Brien"
+output:
+  prettydoc::html_pretty:
+    theme: cayman
+    highlight: github
+    math: katex
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message=FALSE)
+library(tidyverse)
+library(lubridate)
+library(dplyr)
+data <- read.csv("NFL Play by Play 2009-2018 (v5).csv")
+```
+
+```{r, include=FALSE}
+test <- data %>% 
+  select("game_id",
+         "home_team", 
+         "away_team", 
+         "posteam",
+         "posteam_type",
+         "defteam",
+         "game_date",
+         "game_half",
+         "down",
+         "time",
+         "total_home_score",
+         "total_away_score",
+         "posteam_score",
+         "defteam_score",
+         "ydstogo",
+         "ydsnet",
+         "play_type",
+         "pass_attempt",
+         "rush_attempt",
+         "first_down_rush",
+         "first_down_pass",
+         "third_down_converted",
+         "third_down_failed",
+         "rush_touchdown",
+         "pass_touchdown",
+         "return_touchdown",
+         "extra_point_attempt",
+         "yards_gained",
+         "shotgun",
+         "no_huddle",
+         "qb_dropback",
+         "qb_scramble",
+         "sack",
+         "pass_length",
+         "air_yards",
+         "interception",
+         "fumble_lost",
+         "yards_after_catch",
+         "touchdown",
+         "complete_pass",
+         "incomplete_pass",
+         "passer_player_id",
+         "passer_player_name",
+         "pass_location",
+         "run_location",
+         "run_gap")
+
+nfc_north_off<-test
+north_teams <- c("GB", "DET", "MIN", "CHI")
+nfc_north_off<-filter(nfc_north_off, posteam %in% north_teams)
+nfc_north_off$posteam_score[is.na(nfc_north_off$posteam_score)] = 0
+nfc_north_off$air_yards[is.na(nfc_north_off$air_yards)] = 0
+nfc_north_off$yards_after_catch[is.na(nfc_north_off$yards_after_catch)] = 0
+
+gb_game_sum <- nfc_north_off %>%
+  group_by(game_id, home_team, away_team) %>%
+  filter(posteam == "GB") %>%
+  summarize(total_tds = sum(touchdown),
+            home_score = (unique(max(total_home_score))),
+            away_score = (unique(max(total_away_score))),
+            ) %>%
+  mutate(winner = case_when(
+    away_score > home_score ~ away_team,
+    away_score < home_score ~ home_team
+    ))
+
+min_game_sum <- nfc_north_off %>%
+  group_by(game_id, home_team, away_team) %>%
+  filter(posteam == "MIN") %>%
+  summarize(total_tds = sum(touchdown),
+            home_score = (unique(max(total_home_score))),
+            away_score = (unique(max(total_away_score))),
+            ) %>%
+  mutate(winner = case_when(
+    away_score > home_score ~ away_team,
+    away_score < home_score ~ home_team
+    ))
+
+chi_game_sum <- nfc_north_off %>%
+  group_by(game_id, home_team, away_team) %>%
+  filter(posteam == "CHI") %>%
+  summarize(total_tds = sum(touchdown),
+            home_score = (unique(max(total_home_score))),
+            away_score = (unique(max(total_away_score))),
+            ) %>%
+  mutate(winner = case_when(
+    away_score > home_score ~ away_team,
+    away_score < home_score ~ home_team
+    ))
+det_game_sum <- nfc_north_off %>%
+  group_by(game_id, home_team, away_team) %>%
+  filter(posteam == "DET") %>%
+  summarize(total_tds = sum(touchdown),
+            home_score = (unique(max(total_home_score))),
+            away_score = (unique(max(total_away_score))),
+            ) %>%
+  mutate(winner = case_when(
+    away_score > home_score ~ away_team,
+    away_score < home_score ~ home_team
+    ))
+
+gb_game_sum <- gb_game_sum %>%
+  select(home_team, away_team, winner)
+
+min_game_sum <- min_game_sum %>%
+  select(home_team, away_team, winner)
+
+chi_game_sum <- chi_game_sum %>%
+  select(home_team, away_team, winner)
+
+det_game_sum <- det_game_sum %>%
+  select(home_team, away_team, winner)
+
+gb_game_sum$winner <- gsub('GB',1, gb_game_sum$winner)
+gb_game_sum$winner <- gsub('\\d{2,4}',0, gb_game_sum$winner)
+gb_game_sum$winner <- as.numeric(gb_game_sum$winner)
+gb_game_sum$winner[is.na(gb_game_sum$winner)] = 0
+
+min_game_sum$winner <- gsub('MIN',1, min_game_sum$winner)
+min_game_sum$winner <- gsub('\\d{2,4}',0, min_game_sum$winner)
+min_game_sum$winner <- as.numeric(min_game_sum$winner)
+min_game_sum$winner[is.na(min_game_sum$winner)] = 0
+
+chi_game_sum$winner <- gsub('CHI',1, chi_game_sum$winner)
+chi_game_sum$winner <- gsub('\\d{2,4}',0, chi_game_sum$winner)
+chi_game_sum$winner <- as.numeric(chi_game_sum$winner)
+chi_game_sum$winner[is.na(chi_game_sum$winner)] = 0
+
+det_game_sum$winner <- gsub('DET',1, det_game_sum$winner)
+det_game_sum$winner <- gsub('\\d{2,4}',0, det_game_sum$winner)
+det_game_sum$winner <- as.numeric(det_game_sum$winner)
+det_game_sum$winner[is.na(det_game_sum$winner)] = 0
+```
+
+
+```{r, include=FALSE}
+min_pos<-nfc_north_off %>%
+  filter(posteam == 'MIN') %>% 
+  group_by(game_id) %>% 
+  summarize('points_scored' = unique(max(posteam_score, na.rm = TRUE)),
+            'rush_attempts' = sum(rush_attempt), 
+            'pass_attempts' = sum(pass_attempt),
+            'rush_touchdowns' = sum(rush_touchdown), 
+            'pass_touchdowns' = sum(pass_touchdown),
+            'return_touchdowns' = sum(return_touchdown),
+            'completed_passes' = sum(complete_pass),
+            'interceptions' = sum(interception),
+            'fumbles' = sum(fumble_lost),
+            'touchdowns' = sum(touchdown),
+            'turnovers' = sum(fumble_lost) + sum(interception),
+            'yards' = sum(yards_gained),
+            'third_down_pct' = (sum(third_down_converted) / (sum(third_down_converted) + sum(third_down_failed))),
+            'first_down_rushes' = sum(first_down_rush),
+            'first_down_passes' = sum(first_down_pass),
+            'incomp_passes' = sum(incomplete_pass),
+            "air_yards" = sum(air_yards),
+            "yrds_after_catch" = sum(yards_after_catch),
+            "sacks" = sum(sack),
+            )
+```
+
+```{r, include=FALSE}
+gb_pos<-nfc_north_off %>%
+  filter(posteam == 'GB') %>% 
+  group_by(game_id) %>% 
+  summarize('points_scored' = unique(max(posteam_score, na.rm = TRUE)),
+            'rush_attempts' = sum(rush_attempt), 
+            'pass_attempts' = sum(pass_attempt),
+            'rush_touchdowns' = sum(rush_touchdown), 
+            'pass_touchdowns' = sum(pass_touchdown),
+            'return_touchdowns' = sum(return_touchdown),
+            'completed_passes' = sum(complete_pass),
+            'interceptions' = sum(interception),
+            'fumbles' = sum(fumble_lost),
+            'touchdowns' = sum(touchdown),
+            'turnovers' = sum(fumble_lost) + sum(interception),
+            'yards' = sum(yards_gained),
+            'third_down_pct' = (sum(third_down_converted) / (sum(third_down_converted) + sum(third_down_failed))),
+            'first_down_rushes' = sum(first_down_rush),
+            'first_down_passes' = sum(first_down_pass),
+            'incomp_passes' = sum(incomplete_pass),
+            "air_yards" = sum(air_yards),
+            "yrds_after_catch" = sum(yards_after_catch),
+            "sacks" = sum(sack),
+            )
+```
+
+```{r, include=FALSE}
+chi_pos<-nfc_north_off %>%
+  filter(posteam == 'CHI') %>% 
+  group_by(game_id) %>% 
+  summarize('points_scored' = unique(max(posteam_score, na.rm = TRUE)),
+            'rush_attempts' = sum(rush_attempt), 
+            'pass_attempts' = sum(pass_attempt),
+            'rush_touchdowns' = sum(rush_touchdown), 
+            'pass_touchdowns' = sum(pass_touchdown),
+            'return_touchdowns' = sum(return_touchdown),
+            'completed_passes' = sum(complete_pass),
+            'interceptions' = sum(interception),
+            'fumbles' = sum(fumble_lost),
+            'touchdowns' = sum(touchdown),
+            'turnovers' = sum(fumble_lost) + sum(interception),
+            'yards' = sum(yards_gained),
+            'third_down_pct' = (sum(third_down_converted) / (sum(third_down_converted) + sum(third_down_failed))),
+            'first_down_rushes' = sum(first_down_rush),
+            'first_down_passes' = sum(first_down_pass),
+            'incomp_passes' = sum(incomplete_pass),
+            "air_yards" = sum(air_yards),
+            "yrds_after_catch" = sum(yards_after_catch),
+            "sacks" = sum(sack),
+            )
+```
+
+```{r, include=FALSE}
+det_pos<-nfc_north_off %>%
+  filter(posteam == 'DET') %>% 
+  group_by(game_id) %>% 
+  summarize('points_scored' = unique(max(posteam_score, na.rm = TRUE)),
+            'rush_attempts' = sum(rush_attempt), 
+            'pass_attempts' = sum(pass_attempt),
+            'rush_touchdowns' = sum(rush_touchdown), 
+            'pass_touchdowns' = sum(pass_touchdown),
+            'return_touchdowns' = sum(return_touchdown),
+            'completed_passes' = sum(complete_pass),
+            'interceptions' = sum(interception),
+            'fumbles' = sum(fumble_lost),
+            'touchdowns' = sum(touchdown),
+            'turnovers' = sum(fumble_lost) + sum(interception),
+            'yards' = sum(yards_gained),
+            'third_down_pct' = (sum(third_down_converted) / (sum(third_down_converted) + sum(third_down_failed))),
+            'first_down_rushes' = sum(first_down_rush),
+            'first_down_passes' = sum(first_down_pass),
+            'incomp_passes' = sum(incomplete_pass),
+            "air_yards" = sum(air_yards),
+            "yrds_after_catch" = sum(yards_after_catch),
+            "sacks" = sum(sack),
+            )
+```
+
+```{r, include=FALSE}
+gb_pos = merge(x = gb_pos, y = gb_game_sum, by = "game_id", all.y = FALSE)
+gb_pos %>% select(-away_team, -home_team)
+min_pos = merge(x = min_pos, y = min_game_sum, by = "game_id", all.y = FALSE)
+min_pos %>% select(-away_team, -home_team)
+chi_pos = merge(x = chi_pos, y = chi_game_sum, by = "game_id", all.y = FALSE)
+chi_pos %>% select(-away_team, -home_team)
+det_pos = merge(x = det_pos, y = det_game_sum, by = "game_id", all.y = FALSE)
+det_pos %>% select(-away_team, -home_team)
+```
+
+## Introduction
+We, along with many Americans, enjoy the sport of football and the competition of the NFL. Being the data-minded individuals that we are, we thought the idea of analyzing data from NFL games was quite compelling. After researching online through Kaggle and other resources, we discovered a very hefty data set that covered the bases we needed for our analysis. The NFL, and the sport of football, has an incredible amount of data. There are many moving parts within each game, so there are so many different levels of analysis that can be performed. This caused us some struggle in the beginning, however, we were able to narrow our focus and also our data set to reflect that focus. 
+
+We decided to analyze the offenses of the NFC North. By doing this, we were hoping to discover which offense in the NFC North helped drive success for their team the most. By doing this, we would be able to determine which factors of that offense were most correlated with success. Here we explore success along the lines of the amount of points scored, the third down conversion percentage, and the amount of games won by a given team.
+
+After our analysis, we affirmed that the success of an offense’s ability to score points in the NFC North comes down to the following factors:
+
+- Pass Attempts  
+- Rush Attempts
+- Pass Touchdowns 
+- Rush Touchdowns
+- Return Touchdowns
+- Field Goals Made
+
+The exploration of this thesis is significant as there are millions of dollars that go in NFL franchises. Making accurate predictions on an offense's success can help forecast playoff chances, coaching and management ability, and long term success for a given organization.
+
+## Data
+We discovered a very extensive data set on Kaggle entitled, “Detailed NFL Play-by-Play Data 2009-2018.” This data, compiled by the founders of the Carnegie Mellon Sports Analytics Club, was much more than we needed for our partial analysis, so we narrowed down nearly 260 columns of data into the essential variables we thought fit best with our planned analysis. The data is play-by-play, and we wanted to work with games as a whole. 
+
+It took a bit to format columns so that we were able to group all the plays into game summaries, but made the data much nicer to work with. We added in a column indicating if the team was the winner or not, and split the data into four sets, one for each team in the NFC North(Green Bay, Minnesota, Chicago, and Detroit). Many of the columns of data are simply stats from the game, such as touchdowns, passes completed, or third down conversion percentage. We worked with this raw data, and started simply exploring correlations and patterns.
+
+Here is a link to the data set we used:
+
+https://www.kaggle.com/maxhorowitz/nflplaybyplay2009to2016?select=NFL+Play+by+Play+2009-2018+%28v5%29.csv
+
+## Methods
+To perform analysis on the offenses of the NFC North, we used primarily multiple regression. We aimed to determine how significant several explanatory variables, such as pass attempts or rush touchdowns, were in estimating our response variables(points scored). 
+
+## Results
+
+
+## Conclusion
+Through this analysis, we aimed to determine the factors that effectively indicate the success of the offenses of the NFC North. Using the 6 factors listed in the introduction, we were able to model the offensive success of those teams. We discovered correlations unique to some teams that were not true for others, and often times our knowledge of those teams in real life helped us understand why that correlation may hold true. For example, the Detroit Lions, from 2009-2018, had a very bad run game, and relied heavily on their passing game in order to help them win. In our analysis, Detroit showed strong correlation between first down passes and points scored, which was unlike the other three teams in the division. There is also evidence in the plots provided above showing several different factors having some correlation to one of the response variables(points scored, third down percentage, and games won).
+
+Our analysis comes with several limitations. One limitation that we worked through was our data set itself. It was extensively large, which isn't always an issue, but ours had a lot of columns that were incomplete or simply did not match up. There is a chance for error in the data we used, either that the numbers themselves are incorrect or that we made an error when trying to clean the data. This limits our ability to truly, accurately estimate the success of the offenses. Another big limitation of our analysis was simply the scope of it. Football has a vast number of factors at different levels, factors that affect each play, each game, and each season. We focused solely on a few factors on the offensive side of the ball, but the reality is there is so much more going on in a football game that we were not able to account for in our analysis.
+
+We developed a model that currently is only useful in estimating the total points scored by a team when given the factors mentioned in the introduction. However, the downfall for that model is that it doesn't really serve any practical purpose outside of our project. However, the model could be modified in the future to be much more practical for things such as predicting scores of games. The model can be modified to be much more accurate at a smaller scale, meaning rather than using factors that are generally indicative of success, it could use factors specific to a single team's offense. That model could produce much more accurate estimations. The model could also be used effectively at finding what factors of a particular team correlate with winning the game when faced with any given opponent. For example, provided the model is effective, the Green Bay Packers could use a model like this to understand how their team matches up with the Chicago Bears. The factors that indicate success likely differ from opponent to opponent, so applying the model to just one opponent over time could produce very accurate results that indicate what factors have correlated to success against that opponent.
+
+```{r, echo=FALSE}
+gb_plot <- ggplot(gb_pos, aes(y = third_down_pct, x = rush_attempts))+
+  geom_point(aes(colour = factor(winner)))+
+  scale_colour_manual(values = c("red", "green")) +
+  ggtitle("Rushing Attempts vs. Third Down Conversion %", subtitle = "Green Bay")+
+  xlab("rush_attempts")+
+  ylab("third_down_pct")+
+  geom_smooth(method = lm, se = FALSE)
+
+min_plot <- ggplot(min_pos, aes(y = points_scored, x = yrds_after_catch))+
+  geom_point(aes(colour = factor(winner)))+
+  scale_colour_manual(values = c("red", "green")) +
+  ggtitle("Yards After Catch vs. Points Scored", subtitle = "Minnesota")+
+  xlab("yards_after_catch")+
+  ylab("points_scored")+
+  geom_smooth(method = lm, se = FALSE)
+
+chi_plot <- ggplot(chi_pos, aes(y = third_down_pct, x = sacks))+
+  geom_point(aes(colour = factor(winner)))+
+  scale_colour_manual(values = c("red", "green")) +
+  ggtitle("Sacks vs. Third Down Conversion %", subtitle = "Chicago")+
+  xlab("sacks")+
+  ylab("third_down_pct")+
+  geom_smooth(method = lm, se = FALSE)
+
+det_plot <- ggplot(det_pos, aes(y = points_scored, x = turnovers))+
+  geom_point(aes(colour = factor(winner)))+
+  scale_colour_manual(values = c("red", "green")) +
+  ggtitle("Turnovers vs. Points Scored", subtitle = "Detroit")+
+  xlab("turnovers")+
+  ylab("points_scored")+
+  geom_smooth(method = lm, se = FALSE)
+
+
+gb_plot
+min_plot
+chi_plot
+det_plot
+```
+
+
+```{r}
+lm.min = lm(winner~pass_attempts + pass_touchdowns + completed_passes + first_down_passes + air_yards + yrds_after_catch, data=min_pos)
+summary(lm.min)
+```
+
+```{r}
+lm.gb = lm(winner~pass_attempts + pass_touchdowns + completed_passes + first_down_passes + air_yards + yrds_after_catch, data=gb_pos)
+summary(lm.gb)
+```
+
+```{r}
+lm.chi = lm(winner~pass_attempts + pass_touchdowns + completed_passes + first_down_passes + air_yards + yrds_after_catch + interceptions, data=chi_pos)
+summary(lm.chi)
+```
+
+```{r}
+lm.det = lm(winner~pass_attempts + pass_touchdowns + completed_passes + first_down_passes + air_yards + yrds_after_catch, data=det_pos)
+summary(lm.det)
+```
+
+```{r}
+lm.minr = lm(winner~rush_attempts + rush_touchdowns + fumbles + first_down_rushes, data=min_pos)
+summary(lm.minr)
+```
+
+```{r}
+lm.gbr = lm(winner~rush_attempts + rush_touchdowns + fumbles + first_down_rushes, data=gb_pos)
+summary(lm.gbr)
+```
+
+```{r}
+lm.chir = lm(winner~rush_attempts + rush_touchdowns + fumbles + first_down_rushes, data=chi_pos)
+summary(lm.chir)
+```
+
+```{r}
+lm.detr = lm(winner~rush_attempts + rush_touchdowns + fumbles + first_down_rushes, data=det_pos)
+summary(lm.detr)
+```
+
